@@ -16,7 +16,7 @@ for schedule_date in schedule["gameDates"]:
     if scheduled_day != today:
         continue
 
-    for game in schedule_date["games"]:
+    for game in sorted(schedule_date["games"], key=lambda item: item["gameDateTimeEst"]):
         home_team = f"{game['homeTeam']['teamCity']} {game['homeTeam']['teamName']}"
         away_team = f"{game['awayTeam']['teamCity']} {game['awayTeam']['teamName']}"
         ca_broadcasters = []
