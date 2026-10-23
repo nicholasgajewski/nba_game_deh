@@ -1,32 +1,39 @@
 from html import escape
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-from nba_api.live.nba.endpoints import scoreboard
+from nba_api.stats.endpoints.scheduleleaguev2 import ScheduleLeagueV2
 
-# Fetch today's games
-games = scoreboard.ScoreBoard()
-games_dict = games.get_dict()
+today = datetime.now(ZoneInfo("America/New_York")).date()
+season_start_year = today.year if today.month >= 7 else today.year - 1
+season = f"{season_start_year}-{str(season_start_year + 1)[-2:]}"
+schedule = ScheduleLeagueV2(season=season).get_dict()["leagueSchedule"]
 games_today = []
 
-for game in games_dict['scoreboard']['games']:
-    home_team = f"{game['homeTeam']['teamCity']} {game['homeTeam']['teamName']}"
-    away_team = f"{game['awayTeam']['teamCity']} {game['awayTeam']['teamName']}"
-    game_time = game['gameStatusText']
-    
-    # Find Canadian Broadcaster
-    ca_broadcasters = []
-    broadcasters = game.get('broadcasters', {}).get('canadian', [])
-    
-    for b in broadcasters:
-        ca_broadcasters.append(b.get('broadcasterDisplay'))
-    
-    network_info = ", ".join(ca_broadcasters) if ca_broadcasters else "NBA League Pass / TSN+ / SN+"
+for schedule_date in schedule["gameDates"]:
+    scheduled_day = datetime.strptime(schedule_date["gameDate"], "%m/%d/%Y %H:%M:%S").date()
+    if scheduled_day != today:
+        continue
 
-    games_today.append({
-        "matchup": f"{away_team} @ {home_team}",
-        "time": game_time,
-        "network": network_info
-    })
+    for game in schedule_date["games"]:
+        home_team = f"{game['homeTeam']['teamCity']} {game['homeTeam']['teamName']}"
+        away_team = f"{game['awayTeam']['teamCity']} {game['awayTeam']['teamName']}"
+        ca_broadcasters = []
+
+        for group in ("homeTvBroadcasters", "awayTvBroadcasters", "nationalBroadcasters"):
+            for broadcaster in game.get("broadcasters", {}).get(group, []):
+                name = broadcaster.get("broadcasterDisplay", "")
+                if name in ("SN/SN+", "TSN/TSN+", "Spectrum SportsNet", "Prime Video") and name not in ca_broadcasters:
+                    ca_broadcasters.append(name)
+
+        network_info = ", ".join(ca_broadcasters)
+        if network_info:
+            games_today.append({
+                "matchup": f"{away_team} @ {home_team}",
+                "time": game["gameStatusText"],
+                "network": network_info
+            })
 
 # Print today's games
 for game in games_today:
